@@ -1,6 +1,10 @@
 import pandas as pd
 import json
 import os
+import ast
+
+path = "."
+md = pd.read_csv(os.path.join(path, 'tmdb_5000_movies.csv'))
 
 # 1 Data Integration 
 # Fusionner les données de Haythem avec les crédits
@@ -13,9 +17,9 @@ md = md.merge(credits, on='title')
 def get_director(obj):
     L = []
     try:
-        data = json.loads(obj)
+        data = ast.literal_eval(obj) if isinstance(obj, str) else []
         for i in data:
-            if i['job'] == 'Director':
+            if i.get('job') == 'Director':
                 L.append(i['name'])
                 break
     except:
@@ -24,21 +28,34 @@ def get_director(obj):
 
 # Fonction pour supprimer les espaces (Crucial pour le modèle)
 def collapse(L):
-    L1 = []
-    for i in L:
-        L1.append(i.replace(" ",""))
-    return L1
+    if isinstance(L, list):
+        return [i.replace(" ","") for i in L]
+    return []
+
+# Extraction des acteurs (Top 3)
+def convert_cast(obj):
+    try:
+        data = ast.literal_eval(obj)
+        return [i['name'] for i in data[:3]]
+    except:
+        return []
+
+# Nettoyage des mots-clés (Keywords)
+def convert_generic(obj):
+    try:
+        return [i['name'] for i in ast.literal_eval(obj)]
+    except:
+        return []
 
 # 3Processing Features
 
-# Extraction des acteurs (Top 3)
-md['cast'] = md['cast'].apply(lambda x: [i['name'] for i in json.loads(x)][0:3] if isinstance(x, str) else [])
+md['cast'] = md['cast'].apply(convert_cast)
 
 # Extraction du réalisateur
 md['crew'] = md['crew'].apply(get_director)
 
-# Nettoyage des mots-clés (Keywords)
-md['keywords'] = md['keywords'].apply(lambda x: [i['name'] for i in json.loads(x)] if isinstance(x, str) else [])
+md['genres'] = md['genres'].apply(convert_generic)
+md['keywords'] = md['keywords'].apply(convert_generic)
 
 # Suppression des espaces pour éviter la confusion du modèle
 # Exemple: "Science Fiction" -> "ScienceFiction"
@@ -56,7 +73,7 @@ md['overview'] = md['overview'].apply(lambda x: x.split() if isinstance(x, str) 
 md['tags'] = md['overview'] + md['genres'] + md['keywords'] + md['cast'] + md['crew']
 
 # Création du DataFrame final pour le Membre 3
-new_df = md[['id', 'title', 'tags']]
+new_df = md[['id', 'title', 'tags']].copy()
 new_df['tags'] = new_df['tags'].apply(lambda x: " ".join(x).lower())
 
 print("Preprocessing complete. File 'new_df' is ready for the Model member.")
